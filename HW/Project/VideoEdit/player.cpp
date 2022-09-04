@@ -70,10 +70,10 @@ VideoPlayer::VideoPlayer(QWidget *parent)
     m_stopButton->setIcon(QIcon(":/res/stop.png"));
 
 //    剪辑时间
-    StartTimeEdit = new QTimeEdit;
-    StartTimeEdit->setDisplayFormat("HH:mm:ss");
-    EndTimeEdit = new QTimeEdit;
-    EndTimeEdit->setDisplayFormat("HH:mm:ss");
+//    StartTimeEdit = new QTimeEdit;
+//    StartTimeEdit->setDisplayFormat("HH:mm:ss");
+//    EndTimeEdit = new QTimeEdit;
+//    EndTimeEdit->setDisplayFormat("HH:mm:ss");
 
     connect(m_stopButton, &QAbstractButton::clicked,
             this, &VideoPlayer::cutOperation);
@@ -93,15 +93,15 @@ VideoPlayer::VideoPlayer(QWidget *parent)
 
 //    布局
 
-    QHBoxLayout *hLayout = new QHBoxLayout;
+    QBoxLayout *hLayout = new QHBoxLayout;
     hLayout->addWidget(m_positionSlider);
-    hLayout->addWidget(m_labelDuration);
+//    hLayout->addWidget(m_labelDuration);
     QBoxLayout *controlLayout = new QHBoxLayout;
     controlLayout->setContentsMargins(0, 0, 0, 0);
     controlLayout->addWidget(openButton);
     controlLayout->addStretch(1);
-    controlLayout->addWidget(StartTimeEdit);
-    controlLayout->addWidget(EndTimeEdit);
+//    controlLayout->addWidget(StartTimeEdit);
+    controlLayout->addWidget(m_labelDuration);
     controlLayout->addWidget(m_playButton);
     controlLayout->addWidget(m_cutButton);
     controlLayout->addWidget(m_stopButton);
@@ -270,7 +270,8 @@ void VideoPlayer::startCut()
     qDebug()<<"!!!";
 //    m_positionSlider->setTickPosition(m_positionSlider->tickPosition());
     m_positionSlider->VerifyDefaultValue(m_positionSlider->sliderPosition());
-    StartTimeEdit->setTime(currentTime);
+//    StartTimeEdit->setTime(currentTime);
+    cutTime=currentTime;
     m_stopButton->setEnabled(true);
 }
 
@@ -291,8 +292,12 @@ void VideoPlayer::cutOperation()
         outputPath = QFileInfo(sourceFile).absolutePath() +"/clip_"+QString::number(temp)+".mp4";
     }
     QFile destFile(outputPath);
-
-    QString startTime = StartTimeEdit->time().toString("hh:mm:ss");
+    if(cutTime>currentTime)
+    {
+        QMessageBox::warning(this,"Warning",QString::fromLocal8Bit("剪辑失败!"));
+        return;
+    }
+    QString startTime = cutTime.toString("hh:mm:ss");
 //    QString endTime= EndTimeEdit->time().toString("hh:mm:ss");
     QString endTime= currentTime.toString("hh:mm:ss");
     QStringList arguments;

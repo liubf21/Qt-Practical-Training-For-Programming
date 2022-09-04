@@ -59,7 +59,8 @@ private:
     QLabel *m_errorLabel = nullptr;
     QLabel *m_labelDuration = nullptr;
     qint64 m_duration; // 视频总时长
-    QTime currentTime;
+    QTime cutTime; // 剪辑开始时间
+    QTime currentTime; // 当前时间
 //    QString tStr; // 字符串形式的当前时间
 
     PlaylistModel *m_playlistModel = nullptr; // 播放列表模型

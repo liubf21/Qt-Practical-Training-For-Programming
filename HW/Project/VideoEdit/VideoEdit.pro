@@ -11,6 +11,7 @@ CONFIG += c++17
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    edittimeline.cpp \
     main.cpp \
     mainwindow.cpp \
     markslider.cpp \
@@ -18,6 +19,7 @@ SOURCES += \
     playlistmodel.cpp
 
 HEADERS += \
+    edittimeline.h \
     mainwindow.h \
     markslider.h \
     player.h \
