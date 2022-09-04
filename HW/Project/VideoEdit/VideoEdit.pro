@@ -13,11 +13,13 @@ CONFIG += c++17
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
+    markslider.cpp \
     player.cpp \
     playlistmodel.cpp
 
 HEADERS += \
     mainwindow.h \
+    markslider.h \
     player.h \
     playlistmodel.h
 

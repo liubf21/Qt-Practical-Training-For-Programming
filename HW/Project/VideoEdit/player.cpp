@@ -1,8 +1,8 @@
 ﻿#include "player.h"
 
 #include "playlistmodel.h"
-#include <QtWidgets>
-#include <QVideoWidget>
+#include "markslider.h"
+
 
 VideoPlayer::VideoPlayer(QWidget *parent)
     : QWidget(parent)
@@ -47,16 +47,41 @@ VideoPlayer::VideoPlayer(QWidget *parent)
     m_playButton = new QPushButton;
     m_playButton->setEnabled(false);
     m_playButton->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
-    m_playButton->setAutoFillBackground(true);
-    m_playButton->setPalette(p);
+//    m_playButton->setAutoFillBackground(true);
+//    m_playButton->setPalette(p);
 
     connect(m_playButton, &QAbstractButton::clicked,
             this, &VideoPlayer::play);
 
-//    播放时拖动的时间条
-    m_positionSlider = new QSlider(Qt::Horizontal,this);
-    m_positionSlider->setRange(0, m_mediaPlayer->duration() / 1000);
+//    设置剪辑按钮
+    m_cutButton = new QPushButton;
+    m_cutButton->setEnabled(false);
+    m_cutButton->setIcon(QIcon(":/res/cut.png"));
+//    m_cutButton->setIconSize(QSize(20,20));
+//    m_cutButton->setAutoFillBackground(true);
+//    m_cutButton->setPalette(p);
+    connect(m_cutButton, &QAbstractButton::clicked,
+            this, &VideoPlayer::startCut);
 
+
+//    设置剪辑停止按钮
+    m_stopButton = new QPushButton;
+    m_stopButton->setEnabled(false);
+    m_stopButton->setIcon(QIcon(":/res/stop.png"));
+
+//    剪辑时间
+    StartTimeEdit = new QTimeEdit;
+    StartTimeEdit->setDisplayFormat("HH:mm:ss");
+    EndTimeEdit = new QTimeEdit;
+    EndTimeEdit->setDisplayFormat("HH:mm:ss");
+
+    connect(m_stopButton, &QAbstractButton::clicked,
+            this, &VideoPlayer::cutOperation);
+
+//    播放时拖动的时间条
+    m_positionSlider = new MarkSlider(Qt::Horizontal,this);
+    m_positionSlider->setRange(0, m_mediaPlayer->duration() / 1000);
+    m_positionSlider->setValue(50);
     connect(m_positionSlider, &QAbstractSlider::sliderMoved,
             this, &VideoPlayer::setPosition);
 //    显示播放时间
@@ -75,7 +100,11 @@ VideoPlayer::VideoPlayer(QWidget *parent)
     controlLayout->setContentsMargins(0, 0, 0, 0);
     controlLayout->addWidget(openButton);
     controlLayout->addStretch(1);
+    controlLayout->addWidget(StartTimeEdit);
+    controlLayout->addWidget(EndTimeEdit);
     controlLayout->addWidget(m_playButton);
+    controlLayout->addWidget(m_cutButton);
+    controlLayout->addWidget(m_stopButton);
     QBoxLayout *layout = new QVBoxLayout;
     layout->addWidget(m_videoWidget,2);
     layout->addLayout(hLayout);
@@ -134,6 +163,7 @@ void VideoPlayer::addToPlaylist(const QList<QUrl> &urls)
             m_playlist->addMedia(url);
     }
     m_playButton->setEnabled(true);
+    m_cutButton->setEnabled(true);
 }
 
 void VideoPlayer::play()
@@ -146,6 +176,10 @@ void VideoPlayer::play()
         m_mediaPlayer->play();
         break;
     }
+    qDebug()<<m_playlist->currentMedia().request().url().toLocalFile();
+//    获取当前播放视频的地址，以下两种为被弃用的方式
+//    qDebug()<<m_playlist->currentMedia().canonicalUrl().toString();
+//    qDebug()<<m_mediaPlayer->media().resources().first().url().path();
 }
 
 // 跳转视频
@@ -215,7 +249,7 @@ void VideoPlayer::updateDurationInfo(qint64 currentInfo)
     // 更新播放时间
     QString tStr;
     if (currentInfo || m_duration) {
-        QTime currentTime((currentInfo / 3600) % 60, (currentInfo / 60) % 60,
+        currentTime=QTime((currentInfo / 3600) % 60, (currentInfo / 60) % 60,
             currentInfo % 60, (currentInfo * 1000) % 1000);
         QTime totalTime((m_duration / 3600) % 60, (m_duration / 60) % 60,
             m_duration % 60, (m_duration * 1000) % 1000);
@@ -224,5 +258,55 @@ void VideoPlayer::updateDurationInfo(qint64 currentInfo)
             format = "hh:mm:ss";
         tStr = currentTime.toString(format) + " / " + totalTime.toString(format);
     }
+    //记录（传递）时间，用于在剪辑开始和结束的设置
     m_labelDuration->setText(tStr);
 }
+
+//    调用FFmpeg进行视频剪辑操作，需要的参数有输入文件地址，开始时间，结束时间（由两个按钮记录），输出文件地址
+//    把输出文件加入视频列表
+
+void VideoPlayer::startCut()
+{
+    qDebug()<<"!!!";
+//    m_positionSlider->setTickPosition(m_positionSlider->tickPosition());
+    m_positionSlider->VerifyDefaultValue(m_positionSlider->sliderPosition());
+    StartTimeEdit->setTime(currentTime);
+    m_stopButton->setEnabled(true);
+}
+
+void VideoPlayer::cutOperation()
+{
+    QString program = "D:\\program\\ffmpeg-2022-08-25-git-9bf9d42d01-essentials_build\\bin\\ffmpeg.exe";
+    QString inputPath = m_playlist->currentMedia().request().url().toLocalFile();
+    QFile sourceFile(inputPath);
+    if(!sourceFile.exists()){
+        QMessageBox::information(this,QString::fromUtf8("提示"),QString::fromUtf8("找不到源文件"));
+        return;
+    }
+    int temp=1;
+    QString outputPath = QFileInfo(sourceFile).absolutePath() +"/clip_"+QString::number(temp)+".mp4";
+    while(QFile::exists(outputPath))
+    {
+        ++temp;
+        outputPath = QFileInfo(sourceFile).absolutePath() +"/clip_"+QString::number(temp)+".mp4";
+    }
+    QFile destFile(outputPath);
+
+    QString startTime = StartTimeEdit->time().toString("hh:mm:ss");
+//    QString endTime= EndTimeEdit->time().toString("hh:mm:ss");
+    QString endTime= currentTime.toString("hh:mm:ss");
+    QStringList arguments;
+    arguments << "-i" << inputPath << "-r" << "25"<<"-ss";
+    arguments <<startTime<< "-to" << endTime << outputPath;
+
+    QProcess *clipProcess = new QProcess(this);
+//    connect(clipProcess,SIGNAL(finished(int)),this,SLOT(clipVideoFinished(int)));
+
+    clipProcess->start(program, arguments);
+    QList<QUrl> url_list;
+    url_list.append(QUrl::fromLocalFile(outputPath));
+    addToPlaylist(url_list);
+
+}
+
+//    将选中视频加入主时间轴

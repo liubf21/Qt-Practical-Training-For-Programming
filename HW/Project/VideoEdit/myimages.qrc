@@ -1,5 +1,7 @@
 <RCC>
     <qresource prefix="/res">
         <file>hd-wallpaper-7422059_1920.jpg</file>
+        <file>cut.png</file>
+        <file>stop.png</file>
     </qresource>
 </RCC>
