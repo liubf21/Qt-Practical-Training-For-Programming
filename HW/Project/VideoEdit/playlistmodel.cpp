@@ -41,7 +41,9 @@ QVariant PlaylistModel::data(const QModelIndex &index, int role) const
     if (index.isValid() && role == Qt::DisplayRole) {
         QVariant value = m_data[index];
         if (!value.isValid() && index.column() == Title) {
+            // 得到给索引的视频文件位置的QUrl
             QUrl location = m_playlist->media(index.row()).request().url();
+            // data返回文件名，即在ListView中显示
             return QFileInfo(location.path()).fileName();
         }
 
@@ -65,6 +67,7 @@ void PlaylistModel::setPlaylist(QMediaPlaylist *playlist)
     }
 
     beginResetModel();
+    // 指针指向播放列表，并将模型与播放列表绑定
     m_playlist.reset(playlist);
 
     if (m_playlist) {

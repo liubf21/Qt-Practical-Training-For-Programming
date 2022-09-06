@@ -13,7 +13,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     m_player = new VideoPlayer(this);
-
+//    setCentralWidget(m_player);
 //    const QRect availableGeometry = QApplication::desktop()->availableGeometry(&m_player);
 //    int H=this->height(),W=this->width();
 //    m_player-> setGeometry(W/3,20,W/3*2,H/3*2);
@@ -24,7 +24,7 @@ void MainWindow::resizeEvent(QResizeEvent* Size)
 {
 //    m_player->resize(size()); //是采用size()还是frameGeometry.size()根据自己的需求。
     int H=this->height(),W=this->width();
-    m_player-> setGeometry(0,20,W,H/3*2);
+    m_player-> setGeometry(0,20,W,H);
 }
 
 MainWindow::~MainWindow()

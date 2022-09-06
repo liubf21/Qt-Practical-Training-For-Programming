@@ -4,6 +4,7 @@
 #include <QSlider>
 #include <QStyle>
 #include <QPainter>
+
 //QT_BEGIN_NAMESPACE
 //class QSlider;
 //class QStyle;

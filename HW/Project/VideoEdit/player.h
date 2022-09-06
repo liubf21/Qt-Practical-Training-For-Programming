@@ -18,6 +18,7 @@ class QUrl;
 QT_END_NAMESPACE
 class PlaylistModel;
 class MarkSlider;
+class EditTimeLine;
 
 class VideoPlayer : public QWidget
 {
@@ -41,20 +42,26 @@ private slots:
     void durationChanged(qint64 duration);
     void setPosition(int position);
     void handleError();
+    void show_contextmenu1(const QPoint& pos);
+    void menu_Rename();
+    void menu_Delete();
+    void startCut();
+    void cutOperation();
+    void joinEdit();
+
 
 private:
     void updateDurationInfo(qint64 currentInfo);
-    void startCut();
-    void cutOperation();
 
     QMediaPlayer* m_mediaPlayer = nullptr; // 视频播放器
-    QMediaPlaylist *m_playlist = nullptr; // 播放列表（素材）
+
     QVideoWidget *m_videoWidget = nullptr; // 播放窗口
     QAbstractButton *m_playButton = nullptr; // 播放按钮
     QAbstractButton *m_cutButton = nullptr; // 剪辑开始按钮
     QAbstractButton *m_stopButton = nullptr; // 剪辑停止按钮
-    QTimeEdit *StartTimeEdit; // 剪辑开始时间
-    QTimeEdit *EndTimeEdit; // 剪辑结束时间
+    QAbstractButton *m_joinButton = nullptr; // 加入时间轴按钮
+//    QTimeEdit *StartTimeEdit; // 剪辑开始时间
+//    QTimeEdit *EndTimeEdit; // 剪辑结束时间
     MarkSlider *m_positionSlider = nullptr; // 播放时间滑动按钮
     QLabel *m_errorLabel = nullptr;
     QLabel *m_labelDuration = nullptr;
@@ -63,8 +70,12 @@ private:
     QTime currentTime; // 当前时间
 //    QString tStr; // 字符串形式的当前时间
 
+    QMediaPlaylist *m_playlist = nullptr; // 播放列表（素材）
     PlaylistModel *m_playlistModel = nullptr; // 播放列表模型
     QAbstractItemView *m_playlistView = nullptr; // 播放列表视图
+    QList<QUrl> m_urls;
+
+    EditTimeLine *m_editTimeLine = nullptr;
 };
 
 #endif // PLAYER_H

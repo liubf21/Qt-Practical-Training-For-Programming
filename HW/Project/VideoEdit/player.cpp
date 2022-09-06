@@ -1,8 +1,7 @@
 ﻿#include "player.h"
-
 #include "playlistmodel.h"
 #include "markslider.h"
-
+#include "edittimeline.h"
 
 VideoPlayer::VideoPlayer(QWidget *parent)
     : QWidget(parent)
@@ -30,9 +29,13 @@ VideoPlayer::VideoPlayer(QWidget *parent)
     m_playlistModel->setPlaylist(m_playlist);
 
     m_playlistView = new QListView(this);
-    m_playlistView->setModel(m_playlistModel);
+    m_playlistView->setModel(m_playlistModel); // 设置模型
     m_playlistView->setCurrentIndex(m_playlistModel->index(m_playlist->currentIndex(), 0));
 //    m_playlistView->setEnabled(false);
+
+    m_playlistView->setContextMenuPolicy(Qt::CustomContextMenu); // 右键菜单
+    connect(m_playlistView, SIGNAL(customContextMenuRequested(const QPoint&)),
+            this, SLOT(show_contextmenu1(const QPoint&)));
 
     connect(m_playlist, &QMediaPlaylist::currentIndexChanged, this, &VideoPlayer::playlistPositionChanged);
     connect(m_playlistView, &QAbstractItemView::activated, this, &VideoPlayer::jump);
@@ -68,15 +71,21 @@ VideoPlayer::VideoPlayer(QWidget *parent)
     m_stopButton = new QPushButton;
     m_stopButton->setEnabled(false);
     m_stopButton->setIcon(QIcon(":/res/stop.png"));
+    connect(m_stopButton, &QAbstractButton::clicked,
+            this, &VideoPlayer::cutOperation);
+
+//    设置加入主时间轴按钮
+    m_joinButton = new QPushButton;
+    m_joinButton->setEnabled(false);
+    m_joinButton->setIcon(QIcon(":/res/join.png"));
+    connect(m_joinButton, &QAbstractButton::clicked,
+            this, &VideoPlayer::joinEdit);
 
 //    剪辑时间
 //    StartTimeEdit = new QTimeEdit;
 //    StartTimeEdit->setDisplayFormat("HH:mm:ss");
 //    EndTimeEdit = new QTimeEdit;
 //    EndTimeEdit->setDisplayFormat("HH:mm:ss");
-
-    connect(m_stopButton, &QAbstractButton::clicked,
-            this, &VideoPlayer::cutOperation);
 
 //    播放时拖动的时间条
     m_positionSlider = new MarkSlider(Qt::Horizontal,this);
@@ -90,6 +99,15 @@ VideoPlayer::VideoPlayer(QWidget *parent)
 
     m_errorLabel = new QLabel(this);
     m_errorLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+
+//    主时间轴
+    m_editTimeLine = new EditTimeLine(this);
+    m_editTimeLine->show();
+//    QSlider * m_EditSlider = new QSlider(Qt::Horizontal,this);
+//    m_EditSlider->setRange(0,1000);
+//    m_EditSlider->setValue(100);
+//    m_EditSlider->show();
+//    m_editTimeLine->setFixedSize(1000,50);
 
 //    布局
 
@@ -105,6 +123,7 @@ VideoPlayer::VideoPlayer(QWidget *parent)
     controlLayout->addWidget(m_playButton);
     controlLayout->addWidget(m_cutButton);
     controlLayout->addWidget(m_stopButton);
+    controlLayout->addWidget(m_joinButton);
     QBoxLayout *layout = new QVBoxLayout;
     layout->addWidget(m_videoWidget,2);
     layout->addLayout(hLayout);
@@ -115,8 +134,14 @@ VideoPlayer::VideoPlayer(QWidget *parent)
     Blayout->addWidget(m_playlistView,1);
     Blayout->addLayout(layout,2);
 
+    QBoxLayout *Wholelayout = new QVBoxLayout;
+    Wholelayout->addLayout(Blayout,3);
+//    Wholelayout->addWidget(m_EditSlider,1);
+//    m_editTimeLine->setFixedSize(this->size()*1/4);
+    Wholelayout->addWidget(m_editTimeLine,1);
+//    Wholelayout->addWidget(new QPushButton());
 //    setLayout(layout);
-    setLayout(Blayout);
+    setLayout(Wholelayout);
 }
 
 VideoPlayer::~VideoPlayer()
@@ -151,20 +176,93 @@ static bool isPlaylist(const QUrl &url) // Check for ".m3u" playlists.
     if (!url.isLocalFile())
         return false;
     const QFileInfo fileInfo(url.toLocalFile());
-    return fileInfo.exists() && !fileInfo.suffix().compare(QLatin1String("m3u"), Qt::CaseInsensitive);
+//    qDebug()<<url.toLocalFile();
+//    是否满足 存在且后缀为m3u ；compare比较字符串大小，相等才返回0
+    return(fileInfo.exists() && !fileInfo.suffix().compare(QLatin1String("m3u"), Qt::CaseInsensitive));
 }
 
 void VideoPlayer::addToPlaylist(const QList<QUrl> &urls)
 {
     for (auto &url: urls) {
-        if (isPlaylist(url))
-            m_playlist->load(url);
-        else
-            m_playlist->addMedia(url);
+//        qDebug()<<m_urls.count(url);
+        if (isPlaylist(url)) // 判断是否是播放列表
+        {m_playlist->load(url);;}
+        else if(!m_urls.count(url)) // 避免重复加入
+        {m_playlist->addMedia(url);
+        m_urls.append(url);}
     }
     m_playButton->setEnabled(true);
     m_cutButton->setEnabled(true);
+    m_joinButton->setEnabled(true);
 }
+
+// 右键菜单进行文件的重命名和删除
+void VideoPlayer::show_contextmenu1(const QPoint& pos)
+{
+//     if(cmenu)//保证同时只存在一个menu，及时释放内存
+//     {
+//     delete cmenu;
+//     cmenu = NULL;
+//     }
+    //点击空白处将不会出现菜单
+    if(!((m_playlistView->selectionModel()->selectedIndexes()).empty()))
+    {
+
+        qDebug()<<"show_contextmenu1";
+        QMenu *cmenu = new QMenu(m_playlistView);
+        QAction *RenameAction = cmenu->addAction(QString::fromLocal8Bit("重命名"));
+        QAction *DeleteAction = cmenu->addAction(QString::fromLocal8Bit("删除"));
+        connect(RenameAction, SIGNAL(triggered(bool)), this, SLOT(menu_Rename()));
+        connect(DeleteAction, SIGNAL(triggered(bool)), this, SLOT(menu_Delete()));
+        cmenu->exec(QCursor::pos());//在当前鼠标位置显示
+        //cmenu->exec(pos)是在viewport显示
+//        qDebug()<<m_playlistView->selectionModel()->currentIndex().row(); // 通过currentIndex进行重命名和删除
+        //把选中的清除
+        m_playlistView->selectionModel()->clear();
+    }
+}
+void VideoPlayer::menu_Rename()
+{
+    bool ok; // 接受对话框的返回值
+    QString text = QInputDialog::getText(this, tr("Rename"),
+                                         tr("New filename:"), QLineEdit::Normal/*QLineEdit::Password*/,
+                                         "temp", &ok);
+    if (ok && !text.isEmpty())
+        QMessageBox::information(NULL,"notice",text);
+    QUrl location = m_playlist->media(m_playlistView->selectionModel()->currentIndex().row()).request().url();
+    m_playlist->removeMedia(m_playlistView->selectionModel()->currentIndex().row());
+    m_urls.removeAll(location);
+    QFile file(location.toLocalFile());
+    QFileInfo fileInfo(location.toLocalFile());
+    QString filePath = fileInfo.absolutePath()+"/"+text+"."+fileInfo.suffix();
+//    qDebug()<<filePath;
+    if(! file.rename(filePath)) // 若此处使用相对路径，会导致文件不在原来的位置
+    {
+        qDebug() << "rename error:" << file.errorString();
+    }
+    QList<QUrl> url_list;
+    url_list.append(QUrl::fromLocalFile(filePath));
+    addToPlaylist(url_list);
+}
+void VideoPlayer::menu_Delete()
+{
+    // 操作文件时主要\ 和 / 的差异
+//    qDebug()<<m_playlistView->selectionModel()->currentIndex().row();
+    QUrl location = m_playlist->media(m_playlistView->selectionModel()->currentIndex().row()).request().url();
+    m_playlist->removeMedia(m_playlistView->selectionModel()->currentIndex().row());
+    m_urls.removeAll(location);
+//    qDebug()<<location.toLocalFile();
+//    qDebug()<<location.path();
+//    QFile::setPermissions(location.path(),QFile::ReadOther | QFile::WriteOther);
+    QFile file(location.toLocalFile());
+    file.close();
+    if(! file.remove())
+    {
+        qDebug() << "remove error:" << file.errorString();
+    }
+
+}
+
 
 void VideoPlayer::play()
 {
@@ -189,6 +287,7 @@ void VideoPlayer::jump(const QModelIndex &index)
         m_playlist->setCurrentIndex(index.row());
         m_mediaPlayer->play();
     }
+    m_playButton->setEnabled(true);
 }
 
 void VideoPlayer::playlistPositionChanged(int currentItem)
@@ -278,6 +377,7 @@ void VideoPlayer::startCut()
 void VideoPlayer::cutOperation()
 {
     QString program = "D:\\program\\ffmpeg-2022-08-25-git-9bf9d42d01-essentials_build\\bin\\ffmpeg.exe";
+//    得到当前播放视频的文件位置的QUrl，再转为字符串
     QString inputPath = m_playlist->currentMedia().request().url().toLocalFile();
     QFile sourceFile(inputPath);
     if(!sourceFile.exists()){
@@ -315,3 +415,7 @@ void VideoPlayer::cutOperation()
 }
 
 //    将选中视频加入主时间轴
+void VideoPlayer::joinEdit()
+{
+    m_editTimeLine->add(m_playlist->currentMedia().request().url(),m_duration);
+}
