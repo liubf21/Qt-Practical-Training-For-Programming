@@ -17,6 +17,25 @@ public:
     ~MainWindow();
     void resizeEvent(QResizeEvent* size);
 
+private slots:
+    void on_add_picture_triggered();
+
+    void on_add_subtitles_triggered();
+
+    void on_add_text_triggered();
+
+    void on_add_fadein_triggered();
+
+    void on_add_fadeout_triggered();
+
+    void on_add_zoomin_triggered();
+
+    void on_add_zoomout_triggered();
+
+    void on_add_moveright_triggered();
+
+    void on_addmoveleft_triggered();
+
 private:
     Ui::MainWindow *ui;
     VideoPlayer *m_player;

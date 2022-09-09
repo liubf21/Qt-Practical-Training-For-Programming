@@ -1,7 +1,9 @@
-﻿#include "player.h"
+#include "player.h"
 #include "playlistmodel.h"
 #include "markslider.h"
 #include "edittimeline.h"
+#include "dialog.h"
+#include <string>
 
 VideoPlayer::VideoPlayer(QWidget *parent)
     : QWidget(parent)
@@ -46,6 +48,13 @@ VideoPlayer::VideoPlayer(QWidget *parent)
     openButton->setAutoFillBackground(true);
     openButton->setPalette(p);
 
+
+//    设置导出按钮
+    m_exportButton = new QPushButton(tr("Export"));
+    m_exportButton->setEnabled(false);
+    m_exportButton->setIcon(QIcon(":/res/export.png"));
+    connect(m_exportButton, &QAbstractButton::clicked, this, &VideoPlayer::exportvideo);
+
 //    设置播放按钮
     m_playButton = new QPushButton;
     m_playButton->setEnabled(false);
@@ -56,9 +65,10 @@ VideoPlayer::VideoPlayer(QWidget *parent)
     connect(m_playButton, &QAbstractButton::clicked,
             this, &VideoPlayer::play);
 
-//    设置剪辑按钮
+//    设置剪辑开始按钮  Slider在同一位置点击两次该按钮则为拆分
     m_cutButton = new QPushButton;
     m_cutButton->setEnabled(false);
+    m_cutButton->setCheckable(true); // 设置为可选中
     m_cutButton->setIcon(QIcon(":/res/cut.png"));
 //    m_cutButton->setIconSize(QSize(20,20));
 //    m_cutButton->setAutoFillBackground(true);
@@ -80,6 +90,7 @@ VideoPlayer::VideoPlayer(QWidget *parent)
     m_joinButton->setIcon(QIcon(":/res/join.png"));
     connect(m_joinButton, &QAbstractButton::clicked,
             this, &VideoPlayer::joinEdit);
+
 
 //    剪辑时间
 //    StartTimeEdit = new QTimeEdit;
@@ -108,6 +119,8 @@ VideoPlayer::VideoPlayer(QWidget *parent)
 //    m_EditSlider->setValue(100);
 //    m_EditSlider->show();
 //    m_editTimeLine->setFixedSize(1000,50);
+    connect(m_editTimeLine, SIGNAL(playClips(int)), this, SLOT(playUrls(int))); // 播放主时间轴的视频
+    connect(m_editTimeLine, SIGNAL(addUrl(QUrl)), this, SLOT(addUrlEdit(QUrl))); // 返回合并后的视频链接
 
 //    布局
 
@@ -117,6 +130,7 @@ VideoPlayer::VideoPlayer(QWidget *parent)
     QBoxLayout *controlLayout = new QHBoxLayout;
     controlLayout->setContentsMargins(0, 0, 0, 0);
     controlLayout->addWidget(openButton);
+    controlLayout->addWidget(m_exportButton);
     controlLayout->addStretch(1);
 //    controlLayout->addWidget(StartTimeEdit);
     controlLayout->addWidget(m_labelDuration);
@@ -132,7 +146,7 @@ VideoPlayer::VideoPlayer(QWidget *parent)
 
     QBoxLayout *Blayout = new QHBoxLayout;
     Blayout->addWidget(m_playlistView,1);
-    Blayout->addLayout(layout,2);
+    Blayout->addLayout(layout,3);
 
     QBoxLayout *Wholelayout = new QVBoxLayout;
     Wholelayout->addLayout(Blayout,3);
@@ -142,6 +156,17 @@ VideoPlayer::VideoPlayer(QWidget *parent)
 //    Wholelayout->addWidget(new QPushButton());
 //    setLayout(layout);
     setLayout(Wholelayout);
+
+//    QString program = "D:\\program\\ffmpeg-2022-08-25-git-9bf9d42d01-essentials_build\\bin\\ffmpeg.exe";
+//    QString picPath="movie='E\\:/admin/Pictures/159060.jpg',scale=200:200[mask];[in][mask]overlay=0:0[out]";
+//    QStringList arguments;
+//    arguments << "-i" << "E:/admin/Videos/clip_.mp4"
+//              <<"-vf"<<picPath<<"-y";
+//    arguments << "E:/admin/Videos/tmp_2.mp4";
+//    qDebug().noquote()<<"addpic:"<<arguments;
+//    QProcess *clipProcess = new QProcess(this);
+//    clipProcess->start(program, arguments);
+// ffmpeg -i clip_2.mp4 -vf "movie=1.jpg,scale=200:160[mask];[in][mask]overlay=20:20:enable='between (t,0,3)'[out]" -y out_source.mp4
 }
 
 VideoPlayer::~VideoPlayer()
@@ -194,6 +219,7 @@ void VideoPlayer::addToPlaylist(const QList<QUrl> &urls)
     m_playButton->setEnabled(true);
     m_cutButton->setEnabled(true);
     m_joinButton->setEnabled(true);
+    m_exportButton->setEnabled(true);
 }
 
 // 右键菜单进行文件的重命名和删除
@@ -210,8 +236,8 @@ void VideoPlayer::show_contextmenu1(const QPoint& pos)
 
         qDebug()<<"show_contextmenu1";
         QMenu *cmenu = new QMenu(m_playlistView);
-        QAction *RenameAction = cmenu->addAction(QString::fromLocal8Bit("重命名"));
-        QAction *DeleteAction = cmenu->addAction(QString::fromLocal8Bit("删除"));
+        QAction *RenameAction = cmenu->addAction("重命名");
+        QAction *DeleteAction = cmenu->addAction("删除");
         connect(RenameAction, SIGNAL(triggered(bool)), this, SLOT(menu_Rename()));
         connect(DeleteAction, SIGNAL(triggered(bool)), this, SLOT(menu_Delete()));
         cmenu->exec(QCursor::pos());//在当前鼠标位置显示
@@ -274,7 +300,7 @@ void VideoPlayer::play()
         m_mediaPlayer->play();
         break;
     }
-    qDebug()<<m_playlist->currentMedia().request().url().toLocalFile();
+//    qDebug()<<m_playlist->currentMedia().request().url().toLocalFile();
 //    获取当前播放视频的地址，以下两种为被弃用的方式
 //    qDebug()<<m_playlist->currentMedia().canonicalUrl().toString();
 //    qDebug()<<m_mediaPlayer->media().resources().first().url().path();
@@ -283,6 +309,7 @@ void VideoPlayer::play()
 // 跳转视频
 void VideoPlayer::jump(const QModelIndex &index)
 {
+    m_mediaPlayer->setPlaylist(m_playlist);
     if (index.isValid()) {
         m_playlist->setCurrentIndex(index.row());
         m_mediaPlayer->play();
@@ -363,15 +390,51 @@ void VideoPlayer::updateDurationInfo(qint64 currentInfo)
 
 //    调用FFmpeg进行视频剪辑操作，需要的参数有输入文件地址，开始时间，结束时间（由两个按钮记录），输出文件地址
 //    把输出文件加入视频列表
-
 void VideoPlayer::startCut()
 {
-    qDebug()<<"!!!";
-//    m_positionSlider->setTickPosition(m_positionSlider->tickPosition());
+//    Slider在同一位置点击两次该按钮则为拆分
+    if(cutTime==currentTime&&m_cutButton->isChecked())
+    {
+        qDebug()<<"!!!";
+        QProcess *clipProcess = new QProcess(this);
+        QProcess *clipProcess_2 = new QProcess(this);
+        connect(clipProcess_2,SIGNAL(finished(int)),this,SLOT(workOut(int)));
+        QString program = "D:\\program\\ffmpeg-2022-08-25-git-9bf9d42d01-essentials_build\\bin\\ffmpeg.exe";
+        QList<QUrl> url_list;
+        QStringList arguments;
+        QString inputPath = m_playlist->currentMedia().request().url().toLocalFile();
+        QFile sourceFile(inputPath);
+        if(!sourceFile.exists()){
+            QMessageBox::information(this,"提示","找不到源文件");
+            return;
+        }
+        int temp=1;
+        QString outputPath = QFileInfo(sourceFile).absolutePath() +"/clip_"+QString::number(temp)+".mp4";
+        while(QFile::exists(outputPath))
+        {
+            ++temp;
+            outputPath = QFileInfo(sourceFile).absolutePath() +"/clip_"+QString::number(temp)+".mp4";
+        }
+        QString startTime = cutTime.toString("hh:mm:ss");
+        arguments << "-i" << inputPath << "-r" << "25"<<"-ss"
+                  <<"0"<< "-to" << startTime << outputPath;
+        clipProcess->start(program, arguments); // 要理解背后机制。
+        url_list.append(QUrl::fromLocalFile(outputPath));
+        ++temp;
+        outputPath = QFileInfo(sourceFile).absolutePath() +"/clip_"+QString::number(temp)+".mp4";
+        arguments.clear();
+        arguments << "-i" << inputPath << "-r" << "25"<<"-ss"
+                  <<startTime<< "-t" << "9999" << outputPath;
+        clipProcess_2->start(program, arguments);
+        url_list.append(QUrl::fromLocalFile(outputPath));
+        addToPlaylist(url_list);
+    }
+    else{
     m_positionSlider->VerifyDefaultValue(m_positionSlider->sliderPosition());
 //    StartTimeEdit->setTime(currentTime);
     cutTime=currentTime;
     m_stopButton->setEnabled(true);
+    }
 }
 
 void VideoPlayer::cutOperation()
@@ -381,7 +444,7 @@ void VideoPlayer::cutOperation()
     QString inputPath = m_playlist->currentMedia().request().url().toLocalFile();
     QFile sourceFile(inputPath);
     if(!sourceFile.exists()){
-        QMessageBox::information(this,QString::fromUtf8("提示"),QString::fromUtf8("找不到源文件"));
+        QMessageBox::information(this,"提示","找不到源文件");
         return;
     }
     int temp=1;
@@ -391,10 +454,13 @@ void VideoPlayer::cutOperation()
         ++temp;
         outputPath = QFileInfo(sourceFile).absolutePath() +"/clip_"+QString::number(temp)+".mp4";
     }
-    QFile destFile(outputPath);
+//    QFile destFile(outputPath);
+//    if(destFile.exists()){
+//        destFile.remove();
+//    }
     if(cutTime>currentTime)
     {
-        QMessageBox::warning(this,"Warning",QString::fromLocal8Bit("剪辑失败!"));
+        QMessageBox::warning(this,"Warning","剪辑失败!");
         return;
     }
     QString startTime = cutTime.toString("hh:mm:ss");
@@ -405,8 +471,7 @@ void VideoPlayer::cutOperation()
     arguments <<startTime<< "-to" << endTime << outputPath;
 
     QProcess *clipProcess = new QProcess(this);
-//    connect(clipProcess,SIGNAL(finished(int)),this,SLOT(clipVideoFinished(int)));
-
+    connect(clipProcess,SIGNAL(finished(int)),this,SLOT(workOut(int)));
     clipProcess->start(program, arguments);
     QList<QUrl> url_list;
     url_list.append(QUrl::fromLocalFile(outputPath));
@@ -417,5 +482,397 @@ void VideoPlayer::cutOperation()
 //    将选中视频加入主时间轴
 void VideoPlayer::joinEdit()
 {
-    m_editTimeLine->add(m_playlist->currentMedia().request().url(),m_duration);
+    QUrl url=m_playlist->currentMedia().request().url();
+    QString filename = QFileInfo(url.path()).fileName();
+//    判断一下是否是图片,是图片则设置最短时间,并转为视频(tmp临时文件，程序结束删除)
+    if(filename.right(4)==(".jpg") || filename.right(4)==(".bmp") || filename.right(4)==(".png"))
+    {
+        QString program = "D:\\program\\ffmpeg-2022-08-25-git-9bf9d42d01-essentials_build\\bin\\ffmpeg.exe";
+        QString inputPath = url.toLocalFile();
+        QFile sourceFile(inputPath);
+        if(!sourceFile.exists()){
+            QMessageBox::information(this,"提示","找不到源文件");
+            return;
+        }
+        bool ok; // 接受对话框的返回值
+        int t = QInputDialog::getInt(this, tr("Add an image"),"请设置图片持续时间：(s)",
+                                             3,1,10,1, &ok);
+        if(ok)
+        {
+            int temp=1;
+            QString outputPath = QFileInfo(sourceFile).absolutePath() +"/tmp_"+QString::number(temp)+".mp4";
+            while(QFile::exists(outputPath))
+            {
+                ++temp;
+                outputPath = QFileInfo(sourceFile).absolutePath() +"/tmp_"+QString::number(temp)+".mp4";
+            }
+            QStringList arguments;
+            arguments <<"-f"<<"image2"<<"-loop"<<"1"<< "-i" << inputPath<<"-vcodec"<<"libx264"<<"-pix_fmt"<<"yuv420p"<<
+                        "-r" << "25"<<"-t"<<QString::number(t);
+            arguments << outputPath;
+            QProcess *clipProcess = new QProcess(this);
+            connect(clipProcess,SIGNAL(finished(int)),this,SLOT(workOut(int)));
+            clipProcess->start(program, arguments);
+            url=QUrl::fromLocalFile(outputPath);
+            m_duration=t;
+//            ffmpeg -f image2 -loop 1 -i 1.jpg -vcodec libx264 -pix_fmt yuv420p -s 1920*1080 -r 25 -t 5 -y fps.mp4
+        }else{
+            return;
+        }
+
+    }
+    qDebug()<<"Time:"<<m_duration;
+    m_editTimeLine->add(url,m_duration);
+}
+
+void VideoPlayer::playUrls(int i)
+{
+    QUrl url=m_editTimeLine->returnUrl(i);
+    m_mediaPlayer->setMedia(url);
+    if(!m_urls.count(url)) // 避免重复加入
+    {m_playlist->addMedia(url);
+    m_urls.append(url);}
+//    m_mediaPlayer->play();
+}
+
+void VideoPlayer::addUrlEdit(QUrl url)
+{
+    QList<QUrl> url_list;
+    url_list.append(url);
+    qDebug()<<"!"<<url;
+    addToPlaylist(url_list);
+}
+
+void VideoPlayer::addPicture()
+{
+    Dialog *dlg = new Dialog(this);
+    dlg->show();
+    if(dlg->exec()==QDialog::Accepted){
+        QString program = "D:\\program\\ffmpeg-2022-08-25-git-9bf9d42d01-essentials_build\\bin\\ffmpeg.exe";
+        QString inputPath =m_playlist->currentMedia().request().url().toLocalFile() ; // 视频路径
+        QString picPath=dlg->m_url.toLocalFile();
+//        必须插入单个\程序才能运行，但\单个操作为空，\\进行插入时又变成两个 QString坑人！！！(但真正的错误是参数问题
+        picPath.insert(picPath.indexOf(":"),QString("\\"));
+//        qDebug().noquote()<<picPath;
+        QString vfstring="movie='"+picPath+"',scale="+QString::number(dlg->W)+":"+QString::number(dlg->H)
+                +"[mask];[in][mask]overlay="+QString::number(dlg->X)+":"+QString::number(dlg->Y);
+        if(dlg->T){
+            vfstring+=":enable='between (t,"+QString::number(m_positionSlider->sliderPosition())+","+
+                QString::number(m_positionSlider->sliderPosition()+dlg->T)+")'";
+        }
+        vfstring+="[out]";
+        QFile sourceFile(inputPath);
+        if(!sourceFile.exists()){
+            QMessageBox::information(this,"提示","找不到源文件");
+            return;
+        }
+        int temp=1;
+        QString outputPath = QFileInfo(sourceFile).absolutePath() +"/tmp_"+QString::number(temp)+".mp4";
+        while(QFile::exists(outputPath))
+        {
+            ++temp;
+            outputPath = QFileInfo(sourceFile).absolutePath() +"/tmp_"+QString::number(temp)+".mp4";
+        }
+        QStringList arguments;
+        arguments << "-i" <<inputPath
+                  <<"-vf"<<vfstring<<"-y";
+        arguments << outputPath;
+        qDebug().noquote()<<"addpic:"<<arguments;
+        QProcess *clipProcess = new QProcess(this);
+        connect(clipProcess,SIGNAL(finished(int)),this,SLOT(workOut(int)));
+        clipProcess->start(program, arguments);
+        QList<QUrl> url_list;
+        url_list.append(QUrl::fromLocalFile(outputPath));
+        addToPlaylist(url_list);
+    }
+    // ffmpeg -i clip_2.mp4 -vf "movie=1.jpg,scale=200:160[mask];[in][mask]overlay=20:20:enable='between (t,0,3)'[out]" -y out_source.mp4
+}
+
+void VideoPlayer::addText()
+{
+    Dialog *dlg = new Dialog(this);
+    dlg->show();
+    dlg->addText();
+    if(dlg->exec()==QDialog::Accepted){
+        QString program = "D:\\program\\ffmpeg-2022-08-25-git-9bf9d42d01-essentials_build\\bin\\ffmpeg.exe";
+        QString inputPath =m_playlist->currentMedia().request().url().toLocalFile() ; // 视频路径
+        QString vfstring="drawtext=fontfile=msyh.ttc:fontcolor=white:fontsize=40:text='"+dlg->m_text+"':x="+
+                QString::number(dlg->X)+":y="+QString::number(dlg->Y);
+        if(dlg->T){
+            vfstring+=":enable='between (t,"+QString::number(m_duration)+","+
+                QString::number(m_duration+dlg->T)+")'";
+        }
+        qDebug().noquote()<<vfstring;
+        QFile sourceFile(inputPath);
+        if(!sourceFile.exists()){
+            QMessageBox::information(this,"提示","找不到源文件");
+            return;
+        }
+        int temp=1;
+        QString outputPath = QFileInfo(sourceFile).absolutePath() +"/tmp_"+QString::number(temp)+".mp4";
+        while(QFile::exists(outputPath))
+        {
+            ++temp;
+            outputPath = QFileInfo(sourceFile).absolutePath() +"/tmp_"+QString::number(temp)+".mp4";
+        }
+        QStringList arguments;
+        arguments << "-i" <<inputPath
+                  <<"-vf"<<vfstring<<"-y";
+        arguments << outputPath;
+        qDebug().noquote()<<"addpic:"<<arguments;
+        QProcess *clipProcess = new QProcess(this);
+        connect(clipProcess,SIGNAL(finished(int)),this,SLOT(workOut(int)));
+        clipProcess->start(program, arguments);
+        QList<QUrl> url_list;
+        url_list.append(QUrl::fromLocalFile(outputPath));
+        addToPlaylist(url_list);
+    }
+//    ffmpeg -i image_source -vf drawtext=fontfile=font_ttf_path:fontcolor=font_color:
+//    fontsize=font_size:text=message_info:x=from_x:y=from_y:enable='between(t\,10\,20)'  out_source
+}
+
+void VideoPlayer::addSubtitles()
+{
+    QFileDialog fileDialog(this);
+    fileDialog.setAcceptMode(QFileDialog::AcceptOpen);
+    fileDialog.setWindowTitle(tr("Open Picture"));
+    fileDialog.setDirectory(QStandardPaths::standardLocations(QStandardPaths::MoviesLocation).value(0, QDir::homePath()));
+    if (fileDialog.exec() == QDialog::Accepted)
+    {QList<QUrl> urls=fileDialog.selectedUrls();
+        qDebug()<<urls[0].toLocalFile();
+        QString program = "D:\\program\\ffmpeg-2022-08-25-git-9bf9d42d01-essentials_build\\bin\\ffmpeg.exe";
+        QString inputPath =m_playlist->currentMedia().request().url().toLocalFile() ; // 视频路径
+        QString test=urls[0].toLocalFile();
+        test.insert(test.indexOf(":"),QString("\\"));
+        QString vfstring="subtitles='"+test+"'";
+        QFile sourceFile(inputPath);
+        if(!sourceFile.exists()){
+            QMessageBox::information(this,"提示","找不到源文件");
+            return;
+        }
+        int temp=1;
+        QString outputPath = QFileInfo(sourceFile).absolutePath() +"/tmp_"+QString::number(temp)+".mp4";
+        while(QFile::exists(outputPath))
+        {
+            ++temp;
+            outputPath = QFileInfo(sourceFile).absolutePath() +"/tmp_"+QString::number(temp)+".mp4";
+        }
+        QStringList arguments;
+        arguments << "-i" <<inputPath
+                  <<"-vf"<<vfstring<<"-y";
+        arguments << outputPath;
+        qDebug().noquote()<<"addpic:"<<arguments;
+        QProcess *clipProcess = new QProcess(this);
+        connect(clipProcess,SIGNAL(finished(int)),this,SLOT(workOut(int)));
+        clipProcess->start(program, arguments);
+        QList<QUrl> url_list;
+        url_list.append(QUrl::fromLocalFile(outputPath));
+        addToPlaylist(url_list);
+
+    }
+    // ffmpeg -i clip_3.mp4 -vf subtitles=test.srt output.mp4
+}
+
+void VideoPlayer::addFade(int in)
+{
+    // 先判断当前选中的是否是视频
+    QString program = "D:\\program\\ffmpeg-2022-08-25-git-9bf9d42d01-essentials_build\\bin\\ffmpeg.exe";
+    QString inputPath =m_playlist->currentMedia().request().url().toLocalFile() ; // 视频路径
+    QFile sourceFile(inputPath);
+    if(!sourceFile.exists()){
+        QMessageBox::information(this,"提示","找不到源文件");
+        return;
+    }
+    int temp=1;
+    QString outputPath = QFileInfo(sourceFile).absolutePath() +"/fade_"+QString::number(temp)+".mp4";
+    while(QFile::exists(outputPath))
+    {
+        ++temp;
+        outputPath = QFileInfo(sourceFile).absolutePath() +"/fade_"+QString::number(temp)+".mp4";
+    }
+    QStringList arguments;
+    arguments << "-i" <<inputPath<<"-y";
+    if(in){
+
+             arguments <<"-vf"<<"fade=in:0:50";
+    }else{
+        qDebug()<<"duration"<<m_duration;
+        arguments <<"-vf"<<"fade=out:"+QString::number(m_duration) +"*25-50:50";
+    }
+    arguments << outputPath;
+    qDebug().noquote()<<"addFade:"<<arguments;
+    QProcess *clipProcess = new QProcess(this);
+    connect(clipProcess,SIGNAL(finished(int)),this,SLOT(workOut(int)));
+    clipProcess->start(program, arguments);
+    QList<QUrl> url_list;
+    url_list.append(QUrl::fromLocalFile(outputPath));
+    addToPlaylist(url_list);
+}
+
+void VideoPlayer::addZoom(int in)
+{
+    // 先判断当前选中的是否是图片，注意png转jpg的图片可能无法使用
+    QString program = "D:\\program\\ffmpeg-2022-08-25-git-9bf9d42d01-essentials_build\\bin\\ffmpeg.exe";
+    QString inputPath =m_playlist->currentMedia().request().url().toLocalFile() ; // 视频路径
+    QFile sourceFile(inputPath);
+    if(!sourceFile.exists()){
+        QMessageBox::information(this,"提示","找不到源文件");
+        return;
+    }
+    int temp=1;
+    QString outputPath = QFileInfo(sourceFile).absolutePath() +"/zoom_"+QString::number(temp)+".mp4";
+    while(QFile::exists(outputPath))
+    {
+        ++temp;
+        outputPath = QFileInfo(sourceFile).absolutePath() +"/zoom_"+QString::number(temp)+".mp4";
+    }
+    QStringList arguments;
+    arguments << "-i" <<inputPath<<"-y";
+    if(in){
+
+             arguments <<"-vf"<<"zoompan=x='iw/2*(1-1/zoom)':y='ih/2*(1-1/zoom)':"
+                                "z='min(zoom+0.002,1.2)':d=25*3";
+    }else{
+        qDebug()<<"duration"<<m_duration;
+        arguments <<"-vf"<<"zoompan=x='iw/2*(1-1/zoom)':y='ih/2*(1-1/zoom)':"
+                           "z='if(eq(on,1),1.2,zoom-0.002)':d=25*3";
+    }
+    arguments <<"-c:v"<<"libx264"<<"-t"<<"3"<<outputPath;
+    qDebug().noquote()<<"addZoom:"<<arguments;
+    QProcess *clipProcess = new QProcess(this);
+    connect(clipProcess,SIGNAL(finished(int)),this,SLOT(workOut(int)));
+    clipProcess->start(program, arguments);
+    QList<QUrl> url_list;
+    url_list.append(QUrl::fromLocalFile(outputPath));
+    addToPlaylist(url_list);
+
+}
+
+void VideoPlayer::addMove(int in)
+{
+    // 先判断当前选中的是否是图片
+    QString program = "D:\\program\\ffmpeg-2022-08-25-git-9bf9d42d01-essentials_build\\bin\\ffmpeg.exe";
+    QString inputPath =m_playlist->currentMedia().request().url().toLocalFile() ; // 视频路径
+    QFile sourceFile(inputPath);
+    if(!sourceFile.exists()){
+        QMessageBox::information(this,"提示","找不到源文件");
+        return;
+    }
+    int temp=1;
+    QString outputPath = QFileInfo(sourceFile).absolutePath() +"/move_"+QString::number(temp)+".mp4";
+    while(QFile::exists(outputPath))
+    {
+        ++temp;
+        outputPath = QFileInfo(sourceFile).absolutePath() +"/move_"+QString::number(temp)+".mp4";
+    }
+    QStringList arguments;
+    arguments << "-i" <<inputPath<<"-y";
+    if(in){
+
+             arguments <<"-vf"<<"zoompan=x='(100+(on/25*4)*(400-100))*(1-1/zoom)':"
+                                "y='(50+(on/25*4)*(300-50))*(1-1/zoom)':z='1.5':d=25*3";
+    }else{
+        qDebug()<<"duration"<<m_duration;
+        arguments <<"-vf"<<"zoompan=x='(2000+(on/25*4)*(100-200))*(1-1/zoom)':"
+                           "y='(1800+(on/25*4)*(50-180))*(1-1/zoom)':z='1.5':d=25*3";
+    }
+    arguments <<"-c:v"<<"libx264"<<"-t"<<"3"<<outputPath;
+    qDebug().noquote()<<"addZoom:"<<arguments;
+    QProcess *clipProcess = new QProcess(this);
+    connect(clipProcess,SIGNAL(finished(int)),this,SLOT(workOut(int)));
+    clipProcess->start(program, arguments);
+    QList<QUrl> url_list;
+    url_list.append(QUrl::fromLocalFile(outputPath));
+    addToPlaylist(url_list);
+
+}
+
+void VideoPlayer::workOut(int i)
+{
+    if(i){
+        QMessageBox::information(this,"提示","视频处理失败！");
+    }else{
+        QMessageBox::information(this,"提示","视频处理已完成！");
+    }
+}
+
+void VideoPlayer::exportvideo()
+{
+    // 可导出不同格式、码率、分辨率的视频，使用combobox和dialogbutton
+    QDialog *export_dialog= new QDialog;
+    export_dialog->setFixedSize(600,480);
+    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,export_dialog);
+    connect(buttonBox, &QDialogButtonBox::accepted, export_dialog, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, export_dialog, &QDialog::reject);
+    export_dialog->show();
+    buttonBox->show();
+    buttonBox->setGeometry(100,400,400,100);
+    QComboBox *comboBox[3];
+    QLabel *label[3];
+    for(int i=1;i<=3;i++)
+    {
+        comboBox[i-1]=new QComboBox(export_dialog);
+        comboBox[i-1]->setGeometry(300,100*i,200,60);
+        comboBox[i-1]->show();
+        label[i-1]=new QLabel(export_dialog);
+        label[i-1]->setGeometry(100,100*i,200,60);
+        label[i-1]->show();
+    }
+    label[0]->setText("设置导出格式");
+    label[1]->setText("设置分辨率");
+    label[2]->setText("设置码率");
+    QStringList params;
+    params<<"avi"<<"mkv"<<"mp4"<<"flv"<<"gif";
+    comboBox[0]->addItems(params); // 将这些数据加入到comboBox中
+//    comboBox2->setDuplicatesEnabled(true);// 设置可以输入重复值(非必须选项)
+    comboBox[0]->setCurrentIndex(2); // 设置默认选中项
+    params.clear();
+    params<<"480p"<<"720p"<<"1080p";
+    comboBox[1]->addItems(params); // 将这些数据加入到comboBox中
+    comboBox[1]->setCurrentIndex(1); // 设置默认选中项
+    params.clear();
+    params<<"1M"<<"3M"<<"5M";
+    comboBox[2]->addItems(params); // 将这些数据加入到comboBox中
+    comboBox[2]->setCurrentIndex(1); // 设置默认选中项
+    if(export_dialog->exec()==QDialog::Accepted){
+        QString suffix=comboBox[0]->currentText(),Resolution,Bitrate[2];
+
+        switch(comboBox[1]->currentIndex()){
+        case 0:Resolution="scale=480:";break;
+        case 1:Resolution="scale=720:-1";break;
+        case 2:Resolution="scale=1080:-1";break;
+        }
+        switch(comboBox[2]->currentIndex()){
+        case 0:Bitrate[0]="1000k";Bitrate[1]="1500k";break;
+        case 1:Bitrate[0]="2000k";Bitrate[1]="2500k";break;
+        case 2:Bitrate[0]="5000k";Bitrate[1]="6000k";break;
+        }
+
+
+        QString program = "D:\\program\\ffmpeg-2022-08-25-git-9bf9d42d01-essentials_build\\bin\\ffmpeg.exe";
+        QString inputPath =m_playlist->currentMedia().request().url().toLocalFile() ; // 视频路径
+        QFile sourceFile(inputPath);
+        if(!sourceFile.exists()){
+            QMessageBox::information(this,"提示","找不到源文件");
+            return;
+        }
+        int temp=1;
+        QString outputPath = QFileInfo(sourceFile).absolutePath() +"/change_"+QString::number(temp)+"."+suffix;
+        while(QFile::exists(outputPath))
+        {
+            ++temp;
+            outputPath = QFileInfo(sourceFile).absolutePath() +"/change_"+QString::number(temp)+"."+suffix;
+        }
+        QStringList arguments;
+        arguments << "-i" <<inputPath<<"-y";
+        arguments <<"-b:v"<<Bitrate[0]<<"-maxrate"<<Bitrate[1]<<"-bufsize"<<"2000k"<< "-vf" <<Resolution
+                 <<"-vf"<<"pad=ceil(iw/2)*2:ceil(ih/2)*2"<<outputPath;
+        qDebug().noquote()<<"addZoom:"<<arguments;
+        QProcess *clipProcess = new QProcess(this);
+        connect(clipProcess,SIGNAL(finished(int)),this,SLOT(workOut(int)));
+        clipProcess->start(program, arguments);
+        QList<QUrl> url_list;
+        url_list.append(QUrl::fromLocalFile(outputPath));
+        addToPlaylist(url_list);
+    }
 }

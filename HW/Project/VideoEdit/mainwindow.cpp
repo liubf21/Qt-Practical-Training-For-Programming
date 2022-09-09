@@ -32,3 +32,62 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+
+
+void MainWindow::on_add_picture_triggered()
+{
+    m_player->addPicture();
+    // 出现一个窗口，输入文字信息和位置
+
+}
+
+
+void MainWindow::on_add_subtitles_triggered()
+{
+    m_player->addSubtitles();
+}
+
+
+void MainWindow::on_add_text_triggered()
+{
+    m_player->addText();
+
+}
+
+
+
+void MainWindow::on_add_fadein_triggered()
+{
+    m_player->addFade(1);
+}
+
+
+void MainWindow::on_add_fadeout_triggered()
+{
+    m_player->addFade(0);
+}
+
+
+void MainWindow::on_add_zoomin_triggered()
+{
+    m_player->addZoom(1);
+}
+
+
+void MainWindow::on_add_zoomout_triggered()
+{
+    m_player->addZoom(0);
+}
+
+
+void MainWindow::on_add_moveright_triggered()
+{
+    m_player->addMove(1);
+}
+
+
+void MainWindow::on_addmoveleft_triggered()
+{
+    m_player->addMove(0);
+}
+

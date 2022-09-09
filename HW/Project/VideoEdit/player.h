@@ -1,4 +1,4 @@
-﻿#ifndef PLAYER_H
+#ifndef PLAYER_H
 #define PLAYER_H
 
 #include <QWidget>
@@ -35,6 +35,14 @@ public slots:
     void play();
     void jump(const QModelIndex &index);
     void playlistPositionChanged(int currentItem);
+    void playUrls(int);
+    void addUrlEdit(QUrl);
+    void addPicture();
+    void addText();
+    void addSubtitles();
+    void addFade(int in); // in=1为淡入，0为淡出
+    void addZoom(int in);   // 只有图片能操作
+    void addMove(int in);   // 只有图片能操作
 
 private slots:
     void mediaStateChanged(QMediaPlayer::State state);
@@ -48,6 +56,8 @@ private slots:
     void startCut();
     void cutOperation();
     void joinEdit();
+    void workOut(int);
+    void exportvideo();
 
 
 private:
@@ -60,6 +70,7 @@ private:
     QAbstractButton *m_cutButton = nullptr; // 剪辑开始按钮
     QAbstractButton *m_stopButton = nullptr; // 剪辑停止按钮
     QAbstractButton *m_joinButton = nullptr; // 加入时间轴按钮
+    QAbstractButton *m_exportButton = nullptr; // 导出按钮
 //    QTimeEdit *StartTimeEdit; // 剪辑开始时间
 //    QTimeEdit *EndTimeEdit; // 剪辑结束时间
     MarkSlider *m_positionSlider = nullptr; // 播放时间滑动按钮

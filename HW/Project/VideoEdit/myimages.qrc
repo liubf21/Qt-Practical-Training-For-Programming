@@ -4,5 +4,8 @@
         <file>cut.png</file>
         <file>stop.png</file>
         <file>join.png</file>
+        <file>export.png</file>
+        <file>merge.png</file>
+        <file>remove.png</file>
     </qresource>
 </RCC>
