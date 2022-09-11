@@ -1,0 +1,13 @@
+<RCC>
+    <qresource prefix="/res">
+        <file>res/cut.png</file>
+        <file>res/export.png</file>
+        <file>res/join.png</file>
+        <file>res/merge.png</file>
+        <file>res/myico.ico</file>
+        <file>res/remove.png</file>
+        <file>res/stop.png</file>
+        <file>res/hd-wallpaper.jpg</file>
+    </qresource>
+    <qresource prefix="/new/prefix1"/>
+</RCC>

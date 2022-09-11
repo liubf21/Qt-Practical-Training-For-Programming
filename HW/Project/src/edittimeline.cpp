@@ -81,7 +81,6 @@ void EditTimeLine::add(QUrl url,qint64 duration)    // 传入视频链接和时�
     m_clipButtons.last()->show();
 
     connect(m_clipButtons.last(), SIGNAL(clicked()),m_signalMapper, SLOT(map()));
-    qDebug()<<m_clipButtons.size();
     m_signalMapper->setMapping(m_clipButtons.last(), m_clipButtons.size()); // 注意此处，编号0则映射为1
     m_removeButton->setEnabled(true);
     m_mergeButton->setEnabled(true);
@@ -142,16 +141,14 @@ void EditTimeLine::remove(int i)
 {
     for(int i=0;i<m_clips.count();i++){
         if(m_clipButtons[i]->isChecked()){
-            qDebug()<<"remove"<<i;
             disconnect(m_clipButtons[i], SIGNAL(clicked()),m_signalMapper, SLOT(map()));
             m_clipButtons[i]->deleteLater();
             m_clipButtons.removeAt(i);
             m_clips.removeAt(i);
             m_clipsDuration.removeAt(i);
             // 需要把后面部件的重新绑定
-            qDebug()<<m_clips.count();
             for(int j=i;j<m_clips.count();j++)
-            {   qDebug()<<"num"<<j<<m_clips[j];
+            {
                 m_signalMapper->removeMappings(m_clipButtons[j]);
                 m_signalMapper->setMapping(m_clipButtons[j], j+1);}
             // 重新排布
